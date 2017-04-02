@@ -1,0 +1,8 @@
+[package]
+name = "felix"
+version = "0.1.0"
+authors = ["nathan"]
+
+[dependencies]
+discord = "0.8.0"
+dpermissions = {path = "dpermissions"}
