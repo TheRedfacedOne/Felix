@@ -14,13 +14,6 @@ use felix::commands::Command;
 
 const cmd_list: &'static [Command] = &[
 	Command {
-		label: "!ping".into(),
-		desc: "Pong!".into(),
-		help_text: "ping".into(),
-		perm: "felix.ping".into(),
-		run: commands::ping_cmd
-	},
-	Command {
 		label: "!jt".into(),
 		desc: "Jisho test.".into(),
 		help_text: "???".into(),
