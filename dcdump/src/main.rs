@@ -5,7 +5,7 @@ extern crate rusqlite;
 
 use std::path::PathBuf;
 use discord::Discord;
-use discord::model::{Message, UserId, ChannelId};
+use discord::model::{Event, Message, UserId, ChannelId};
 use dpermissions::Permissions;
 //use discord::model::UserId;
 //use std::env;
@@ -13,23 +13,23 @@ use dpermissions::Permissions;
 //use std::collections::HashMap;
 use felix::DContext;
 use felix::commands::Command;
-use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT}
+use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
+use std::borrow::Cow::Borrowed;
 
 //static ChannelStatuses: RwLock<HashMap<discord::model::ChannelId, ()>> = RwLock::new(
 //    HashMap::new()
 //);
 
-static mut DCDATA_FOLDER: &str = "";
+static mut DCDATA_FOLDER: Option<String> = None;
 static SCRAPING_ACTIVE: AtomicBool = ATOMIC_BOOL_INIT;
-//static mut DB: Option<rusqlite::Connection> = None;
-static mut DB: rusqlite::Connection = unsafe { std::mem::unitialized() };
+static mut DB: Option<rusqlite::Connection> = None;
 
-const cmd_list: &'static [Command] = &[
+const CMD_LIST: &'static [Command] = &[
 	Command {
-		label: "!scrape_channel".into(),
-		desc: "Scrape that channel".into(),
-		help_text: "<ChannelId>".into(),
-		perm: "dcdump.scrape_channel".into(),
+		label: Borrowed("!scrape_channel"),
+		desc: Borrowed("Scrape that channel"),
+		help_text: Borrowed("<ChannelId>"),
+		perm: Borrowed("dcdump.scrape_channel"),
 		run: scrape_channel
 	},
 ];
@@ -44,7 +44,7 @@ fn scrape_channel(c: &Command, dctx: &DContext, m: &Message, args: &[&str]) {
 
 	if channel_u64.is_err() {
 		let err = format!("Error: failed to parse channel-id string to u64 ({:?})", channel_u64);
-		dctx.send_message(m.channel_id, err, "", false);
+		dctx.send_message(m.channel_id, err.as_str(), "", false);
 		return;
 	}
 
@@ -65,28 +65,24 @@ fn scrape_channel(c: &Command, dctx: &DContext, m: &Message, args: &[&str]) {
 }
 
 fn main() {
-	unsafe {
-		DCDATA_FOLDER = std::env::args().nth(1).unwrap_or("./dcdata");
-	}
 
-	std::fs::create_dir_all(DCDATA_FOLDER).unwrap();
-	println!("DCDATA_FOLDER = {:?}", DCDATA_FOLDER);
+	let tmp_dcdata = std::env::args().nth(1).unwrap_or("./dcdata".to_string());
+	std::fs::create_dir_all(&tmp_dcdata).unwrap();
+	println!("DCDATA_FOLDER = {:?}", tmp_dcdata);
 
-	let mut db_file = PathBuf::from(DCDATA_FOLDER);
+	let mut db_file = PathBuf::from(&tmp_dcdata);
 	db_file.push("dcdb.sqlite");
 
-	unsafe {
-		DB = Some(rusqlite::Connection::open(db_file).unwrap());
-	}
+	unsafe { DCDATA_FOLDER = Some(tmp_dcdata); }
 
-	DB.execute("CREATE TABLE messages (
+	let tmp_db = rusqlite::Connection::open(db_file).unwrap();
+	tmp_db.execute("CREATE TABLE messages (
 		id                  INTEGER PRIMARY KEY NOT NULL,
 		channel_id          INTEGER NOT NULL,
 		author_id           INTEGER NOT NULL,
 		content             TEXT    NOT NULL
 	)", &[]).unwrap();
-
-	DB.execute("CREATE TABLE attachments (
+	tmp_db.execute("CREATE TABLE attachments (
 		id                  TEXT    PRIMARY KEY NOT NULL,
 		message_id          INTEGER NOT NULL,
 		filename            TEXT    NOT NULL,
@@ -97,25 +93,31 @@ fn main() {
 		dimensions1         INTEGER
 	)", &[]).unwrap();
 
+	unsafe { DB = Some(tmp_db); }
+
 	println!("Database opened.");
 
 	let mut dctx = DContext::from_bot_token(
 		&std::env::var("DISCORD_TOKEN").expect("Missing DISCORD_TOKEN env-var.")
 	);
 
-	let perms = felix::init_perms(&dctx, "./perms.json");
+	let perms = felix::init_perms("./perms.json");
 	println!("## dcdump is running.");
 
 	loop {
 		match dctx.connection.recv_event() {
-			Ok(event) => dctx.state.update(&event)
 			Ok(Event::MessageCreate(m)) => {
-				commands::parse_cmd(&dctx, &m, cmd_list, &perms);
+				felix::commands::parse_cmd(&dctx, &m, CMD_LIST, &perms);
+			}
+			Ok(event) => {
+				dctx.state.update(&event);
 			}
 			Err(discord::Error::Closed(code, body)) => {
 				println!("Gateway closed with code {:?}:\n{}", code, body);
 			}
-			Err(err) => println!("Error {:?}", err)
+			Err(err) => {
+				println!("Error {:?}", err);
+			}
 		}
 	}
 }

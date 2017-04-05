@@ -1,5 +1,4 @@
 target
-dpermissions
 data
 Cargo.lock
 *.json

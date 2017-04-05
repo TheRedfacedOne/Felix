@@ -1,0 +1,10 @@
+[package]
+name = "dpermissions"
+version = "0.1.0"
+authors = ["rrred"]
+
+[dependencies]
+discord = "0.8.0"
+serde = "0.9.12"
+serde_derive = "0.9.11"
+serde_json = "0.9.9"

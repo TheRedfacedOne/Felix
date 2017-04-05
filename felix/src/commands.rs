@@ -1,9 +1,9 @@
 
-use discord::Discord;
 use discord::model::Message;
 use dpermissions::Permissions;
 use std::borrow::Cow;
-//use felix::*;
+use std::borrow::Cow::Borrowed;
+use ::DContext;
 
 pub fn null_cmd(c: &Command, dctx: &DContext, m: &Message, args: &[&str]) {
 	// null command
@@ -11,24 +11,24 @@ pub fn null_cmd(c: &Command, dctx: &DContext, m: &Message, args: &[&str]) {
 
 const GLOBAL_COMMANDS: &'static [Command] = &[
 	Command {
-		label: "!help".into(),
-		desc: "Lists commands and their stuff.".into(),
-		help_text: "!help [command]".into(),
-		perm: "help".into(),
+		label: Borrowed("!help"),
+		desc: Borrowed("Lists commands and their stuff."),
+		help_text: Borrowed("!help [command]"),
+		perm: Borrowed("help"),
 		run: null_cmd
 	},
 	Command {
-		label: "!ping".into(),
-		desc: "Pong!".into(),
-		help_text: "ping".into(),
-		perm: "ping".into(),
+		label: Borrowed("!ping"),
+		desc: Borrowed("Pong!"),
+		help_text: Borrowed("ping"),
+		perm: Borrowed("ping"),
 		run: ping_cmd
 	},
 	Command {
-		label: "!accept_invite".into(),
-		desc: "Accept that invite".into(),
-		help_text: "<invite-code or invite-url>".into(),
-		perm: "accept_invite".into(),
+		label: Borrowed("!accept_invite"),
+		desc: Borrowed("Accept that invite"),
+		help_text: Borrowed("<invite-code or invite-url>"),
+		perm: Borrowed("accept_invite"),
 		run: accept_invite_cmd
 	},
 ];
@@ -41,79 +41,79 @@ pub struct Command<'a> {
 	pub run: fn(c: &Command, dctx: &DContext, m: &Message, args: &[&str]),
 }
 
-impl Command<'a> {
-	pub fn exec(&self, dctx: &DContext, m: &Message, c: &Command, p: &Permissions, args: &[&str]) {
-		let do_it = {
-			if m.author.id == dctx.app_info.owner.id { return true; }
-			if let Some(group) = p.get_group("default") { return true; }
-			if p.user_has_perm(m.author.id, c.perm) { return true; }
-		};
-
-		if do_it {
-			(self.run)(c, dctx, m, args);
-		}
+impl<'a> Command<'a> {
+	pub fn should_run(
+		&self,
+		dctx: &DContext,
+		m: &Message,
+		c: &Command,
+		p: &Permissions,
+		args: &[&str]
+	) -> bool
+	{
+		if m.author.id == dctx.app_info.owner.id { return true; }
+		if let Some(_) = p.get_group("default") { return true; }
+		if p.user_has_perm(m.author.id, &c.perm) { return true; }
+		false
 	}
 }
 
 pub fn parse_cmd(dctx: &DContext, m: &Message, c: &[Command], p: &Permissions) {
 	if !m.content.starts_with("!") { return; }
-	let args_iter = m.content.split(' ');
-	let command = args_iter.next();
+	let mut args_iter = m.content.split(' ');
+	let command = args_iter.next().unwrap();
 
 	let mut cmd_iter = GLOBAL_COMMANDS.iter().chain(c.iter());
 
 	if command == "!help" {
-		help_cmd(cmd_iter, dctx, m, &args_iter.collect());
+		let args: Vec<&str> = args_iter.collect();
+		if args.len() == 0 {
+			let mut msg = String::from("```");
+			for cmd in cmd_iter {
+				msg += format!(
+					"{}: {}\nUsage: {}\n\n",
+					cmd.label,
+					cmd.desc,
+					cmd.help_text
+				).as_str();
+			}
+			msg.push_str("```");
+			dctx.send_message(m.channel_id, msg.as_str(), "", false);
+		} else {
+			match cmd_iter.find(|ref cmd| args[1] == cmd.label.trim_left_matches('!')) {
+				Some(x) => {
+					let msg = format!(
+						"```{}: {}\nUsage: {}```",
+						x.label,
+						x.desc,
+						x.help_text
+					);
+					dctx.send_message(m.channel_id, msg.as_str(), "", false);
+				}
+				None => {
+					dctx.send_message(m.channel_id, "Error: command not found", "", false);
+				}
+			}
+		}
 		return;
 	}
 
 	//for cmd in cmd_iter {
 	//	if command == cmd.label {
 	//		//let args: Vec<&str> = args_iter.collect();
-	//		cmd.exec(dctx, m, &cmd, p, &args_iter.collect());
+	//		cmd.should_run(dctx, m, &cmd, p, &args_iter.collect());
 	//		return;
 	//	}
 	//}
 
-	match cmd_iter.find(|&&cmd| command == cmd.label) {
+	match cmd_iter.find(|ref cmd| command == cmd.label) {
 		Some(x) => {
-			//let args: Vec<&str> = args_iter.collect();
-			cmd.exec(dctx, m, &cmd, p, &args_iter.collect());
+			let args: Vec<&str> = args_iter.collect();
+			if x.should_run(dctx, m, &x, p, &args) {
+				(x.run)(x, dctx, m, &args);
+			}
 		}
 		_ => {}
-	}
-}
-
-pub fn help_cmd<'a, I>(cmd_iter: &I, dctx: &DContext, m: &Message, args: &[&str])
-	where I: Iterator<Item=&'a Command>
-{
-	if args.len() == 0 {
-		let mut msg = String::from("```");
-		for cmd in cmd_iter {
-			msg += format!(
-				"{}: {}\nUsage: {}\n\n",
-				cmd.label,
-				cmd.desc,
-				cmd.help_txt
-			);
-		}
-		msg.push_str("```");
-		dctx.send_message(m.channel_id, msg.as_str(), "", false);
-	} else {
-		match cmd_iter.find(|&&cmd| args[1] == cmd.label.trim_left_matches('!')) {
-			Some(x) => {
-				let msg = format!(
-					"```{}: {}\nUsage: {}```",
-					x.label,
-					x.desc,
-					x.help_text
-				);
-				dctx.send_message(m.channel_id, msg.as_str(), "", false);
-			}
-			None => {
-				dctx.send_message(m.channel_id, "Error: command not found", "", false);
-			}
-		}
 	}
 }
 

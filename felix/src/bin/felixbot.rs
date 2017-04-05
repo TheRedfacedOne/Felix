@@ -1,31 +1,30 @@
 
 extern crate discord;
 extern crate dpermissions;
+extern crate felix;
 
-use discord::Discord;
 use discord::model::Event;
 use std::env;
-use dpermissions::Permissions;
-use dpermissions::Error;
 //~ use hyper::client::Client;
 //use felix::*;
 use felix::DContext;
 use felix::commands::Command;
+use std::borrow::Cow::Borrowed;
 
-const cmd_list: &'static [Command] = &[
+const CMD_LIST: &'static [Command] = &[
 	Command {
-		label: "!jt".into(),
-		desc: "Jisho test.".into(),
-		help_text: "???".into(),
-		perm: "felix.jt".into(),
-		run: commands::jt_cmd
+		label: Borrowed("!jt"),
+		desc: Borrowed("Jisho test."),
+		help_text: Borrowed("???"),
+		perm: Borrowed("felix.jt"),
+		run: felix::commands::jt_cmd
 	},
 	Command {
-		label: "!strokes".into(),
-		desc: "Shows stroke order for given character(s) (max 3).".into(),
-		help_text: "strokes <characters>".into(),
-		perm: "felix.strokes".into(),
-		run: strokes::strokes_cmd
+		label: Borrowed("!strokes"),
+		desc: Borrowed("Shows stroke order for given character(s) (max 3)."),
+		help_text: Borrowed("strokes <characters>"),
+		perm: Borrowed("felix.strokes"),
+		run: felix::strokes::strokes_cmd
 	},
 ];
 
@@ -35,18 +34,23 @@ fn main() {
 
 	let mut dctx = DContext::from_bot_token(&token);
 
-	let perms = felix::init_perms(&dctx, "./perms.json");
+	let perms = felix::init_perms("./perms.json");
 	println!("Felix is running.");
+
 	loop {
-		match conn.recv_event() {
-			Ok(event) => dctx.state.update(&event)
+		match dctx.connection.recv_event() {
 			Ok(Event::MessageCreate(m)) => {
-				commands::parse_cmd(&dctx, &m, cmd_list, &perms);
+				felix::commands::parse_cmd(&dctx, &m, CMD_LIST, &perms);
+			}
+			Ok(event) => {
+				dctx.state.update(&event);
 			}
 			Err(discord::Error::Closed(code, body)) => {
 				println!("Gateway closed with code {:?}:\n{}", code, body);
 			}
-			Err(err) => println!("Error {:?}", err)
+			Err(err) => {
+				println!("Error {:?}", err);
+			}
 		}
 	}
 }

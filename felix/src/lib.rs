@@ -1,9 +1,14 @@
 extern crate discord;
 extern crate dpermissions;
 
-//use discord::Discord;
+use std::io::Read;
+use discord::Discord;
+use discord::model::ChannelId;
 use dpermissions::Permissions;
 use dpermissions::Error;
+
+pub mod commands;
+pub mod strokes;
 
 pub struct DContext {
 	pub session: discord::Discord,
@@ -15,9 +20,9 @@ pub struct DContext {
 
 impl DContext {
 	pub fn from_bot_token(token: &str) -> DContext {
-		let mut session = Discord::from_bot_token(token).expect("Login failed. Invalid token?");
-		let (mut connection, ready) = session.connect().expect("Connection failed.");
-		let mut app_info = session.get_application_info().unwrap();
+		let session = Discord::from_bot_token(token).expect("Login failed. Invalid token?");
+		let (connection, ready) = session.connect().expect("Connection failed.");
+		let app_info = session.get_application_info().unwrap();
 		DContext {
 			session: session,
 			connection: connection,
@@ -45,16 +50,14 @@ impl DContext {
 	}
 }
 
-pub fn init_perms(dctx: &DContext, path: &str) -> Permissions {
-	let perms = match dpermissions::load_perms(path) {
+pub fn init_perms(path: &str) -> Permissions {
+	let perms = match dpermissions::load(path) {
 		Ok(p) => p,
 		Err(err) => {
 			match err {
 				Error::Io(_) => {
-					let app_info = dctx.session.get_application_info().unwrap();
-					let owner_id = format!("{}", app_info.owner.id);
-					let perms = dpermissions::create_default(owner_id);
-					match dpermissions::save_perms(path, &perms) {
+					let perms: Permissions = Default::default();
+					match perms.save(path) {
 						Ok(_) => return perms,
 						Err(e) => {
 							panic!("Error saving default {}:\n{}", path, e);
