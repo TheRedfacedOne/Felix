@@ -9,16 +9,20 @@ pub struct DContext {
 	pub session: discord::Discord,
 	pub connection: discord::Connection,
 	pub state: discord::State,
+	/// `app_info` should NOT be used to check strings at all. Only cached owner-id.
+	pub app_info: discord::model::ApplicationInfo
 }
 
 impl DContext {
 	pub fn from_bot_token(token: &str) -> DContext {
 		let mut session = Discord::from_bot_token(token).expect("Login failed. Invalid token?");
 		let (mut connection, ready) = session.connect().expect("Connection failed.");
+		let mut app_info = session.get_application_info().unwrap();
 		DContext {
 			session: session,
 			connection: connection,
-			state: discord::State::new(ready)
+			state: discord::State::new(ready),
+			app_info: app_info
 		}
 	}
 

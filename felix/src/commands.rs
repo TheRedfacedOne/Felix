@@ -43,12 +43,14 @@ pub struct Command<'a> {
 
 impl Command<'a> {
 	pub fn exec(&self, dctx: &DContext, m: &Message, c: &Command, p: &Permissions, args: &[&str]) {
-		let author = format!("{}", m.author.id);
-		if let Some(group) = p.get_group("default") {
-			if p.group_has_perm(group, c.perm) { (self.run)(c, dctx, m, args) }
-		}
-		if p.user_has_perm(author.as_str(), c.perm) {
-			(self.run)(c, dctx, m, args)
+		let do_it = {
+			if m.author.id == dctx.app_info.owner.id { return true; }
+			if let Some(group) = p.get_group("default") { return true; }
+			if p.user_has_perm(m.author.id, c.perm) { return true; }
+		};
+
+		if do_it {
+			(self.run)(c, dctx, m, args);
 		}
 	}
 }
