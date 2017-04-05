@@ -1,0 +1,10 @@
+[package]
+name = "dcdump"
+version = "0.1.0"
+authors = ["yupi2"]
+
+[dependencies]
+rusqlite = "0.10.1"
+discord = "0.8.0"
+dpermissions = { path = "../dpermissions" }
+felix = { path = "../felix" }
