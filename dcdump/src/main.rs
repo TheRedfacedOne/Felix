@@ -26,20 +26,6 @@ static mut DB: rusqlite::Connection = unsafe { std::mem::unitialized() };
 
 const cmd_list: &'static [Command] = &[
 	Command {
-		label: "!ping".into(),
-		desc: "Pong!".into(),
-		help_txt: "ping".into(),
-		perm: "dcdump.ping".into(),
-		run: commands::ping_cmd
-	},
-	Command {
-		label: "!accept_invite".into(),
-		desc: "Accept that invite".into(),
-		help_text: "<invite-code or invite-url>".into(),
-		perm: "dcdump.accept_invite".into(),
-		run: commands::accept_invite_cmd
-	},
-	Command {
 		label: "!scrape_channel".into(),
 		desc: "Scrape that channel".into(),
 		help_text: "<ChannelId>".into(),
@@ -94,14 +80,14 @@ fn main() {
 	}
 
 	DB.execute("CREATE TABLE messages (
-		id                  INTEGER PRIMARY KEY,
+		id                  INTEGER PRIMARY KEY NOT NULL,
 		channel_id          INTEGER NOT NULL,
 		author_id           INTEGER NOT NULL,
 		content             TEXT    NOT NULL
 	)", &[]).unwrap();
 
 	DB.execute("CREATE TABLE attachments (
-		id                  TEXT    NOT NULL,
+		id                  TEXT    PRIMARY KEY NOT NULL,
 		message_id          INTEGER NOT NULL,
 		filename            TEXT    NOT NULL,
 		url                 TEXT    NOT NULL,
