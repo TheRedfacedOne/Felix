@@ -1,12 +1,13 @@
+
 extern crate discord;
 extern crate dpermissions;
 extern crate felix;
 extern crate rusqlite;
+#[macro_use]
+extern crate lazy_static;
 
 use std::path::PathBuf;
-use discord::Discord;
 use discord::model::{Event, Message, UserId, ChannelId};
-use dpermissions::Permissions;
 //use discord::model::UserId;
 //use std::env;
 //use std::sync::RwLock;
@@ -15,14 +16,28 @@ use felix::DContext;
 use felix::commands::Command;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::borrow::Cow::Borrowed;
+use std::sync::Mutex;
 
-//static ChannelStatuses: RwLock<HashMap<discord::model::ChannelId, ()>> = RwLock::new(
-//    HashMap::new()
-//);
 
-static mut DCDATA_FOLDER: Option<String> = None;
 static SCRAPING_ACTIVE: AtomicBool = ATOMIC_BOOL_INIT;
-static mut DB: Option<rusqlite::Connection> = None;
+
+lazy_static! {
+	static ref DCDATA_FOLDER: String = {
+		let tmp_dcdata = std::env::args().nth(1).unwrap_or("./dcdata".to_string());
+		println!("DCDATA_FOLDER = {:?}", tmp_dcdata);
+		std::fs::create_dir_all(&tmp_dcdata).expect("Failed to create directories");
+		tmp_dcdata
+	};
+	static ref DB: Mutex<rusqlite::Connection> = {
+		let mut db_file = PathBuf::from(&*DCDATA_FOLDER);
+		db_file.push("dcdb.sqlite");
+		Mutex::new(
+			rusqlite::Connection::open(db_file).expect("Failed to open DB")
+		)
+	};
+}
+
+
 
 const CMD_LIST: &'static [Command] = &[
 	Command {
@@ -65,24 +80,13 @@ fn scrape_channel(c: &Command, dctx: &DContext, m: &Message, args: &[&str]) {
 }
 
 fn main() {
-
-	let tmp_dcdata = std::env::args().nth(1).unwrap_or("./dcdata".to_string());
-	std::fs::create_dir_all(&tmp_dcdata).unwrap();
-	println!("DCDATA_FOLDER = {:?}", tmp_dcdata);
-
-	let mut db_file = PathBuf::from(&tmp_dcdata);
-	db_file.push("dcdb.sqlite");
-
-	unsafe { DCDATA_FOLDER = Some(tmp_dcdata); }
-
-	let tmp_db = rusqlite::Connection::open(db_file).unwrap();
-	tmp_db.execute("CREATE TABLE messages (
+	DB.lock().unwrap().execute("CREATE TABLE messages (
 		id                  INTEGER PRIMARY KEY NOT NULL,
 		channel_id          INTEGER NOT NULL,
 		author_id           INTEGER NOT NULL,
 		content             TEXT    NOT NULL
 	)", &[]).unwrap();
-	tmp_db.execute("CREATE TABLE attachments (
+	DB.lock().unwrap().execute("CREATE TABLE attachments (
 		id                  TEXT    PRIMARY KEY NOT NULL,
 		message_id          INTEGER NOT NULL,
 		filename            TEXT    NOT NULL,
@@ -93,9 +97,7 @@ fn main() {
 		dimensions1         INTEGER
 	)", &[]).unwrap();
 
-	unsafe { DB = Some(tmp_db); }
-
-	println!("Database opened.");
+	println!("Database is setup.");
 
 	let mut dctx = DContext::from_bot_token(
 		&std::env::var("DISCORD_TOKEN").expect("Missing DISCORD_TOKEN env-var.")

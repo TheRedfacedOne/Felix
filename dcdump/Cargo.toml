@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["yupi2"]
 
 [dependencies]
+lazy_static = "0.2"
 rusqlite = "0.10.1"
 discord = "0.8.0"
 dpermissions = { path = "../dpermissions" }
