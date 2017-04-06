@@ -21,23 +21,17 @@ use std::sync::Mutex;
 
 static SCRAPING_ACTIVE: AtomicBool = ATOMIC_BOOL_INIT;
 
+const DCDUMP_FOLDER: &'static str = "~/.dcdump";
+
 lazy_static! {
-	static ref DCDATA_FOLDER: String = {
-		let tmp_dcdata = std::env::args().nth(1).unwrap_or("./dcdata".to_string());
-		println!("DCDATA_FOLDER = {:?}", tmp_dcdata);
-		std::fs::create_dir_all(&tmp_dcdata).expect("Failed to create directories");
-		tmp_dcdata
-	};
 	static ref DB: Mutex<rusqlite::Connection> = {
-		let mut db_file = PathBuf::from(&*DCDATA_FOLDER);
+		let mut db_file = PathBuf::from(&*DCDUMP_FOLDER);
 		db_file.push("dcdb.sqlite");
 		Mutex::new(
 			rusqlite::Connection::open(db_file).expect("Failed to open DB")
 		)
 	};
 }
-
-
 
 const CMD_LIST: &'static [Command] = &[
 	Command {
@@ -80,6 +74,8 @@ fn scrape_channel(c: &Command, dctx: &DContext, m: &Message, args: &[&str]) {
 }
 
 fn main() {
+	std::fs::create_dir_all(&DCDUMP_FOLDER).expect("Failed to create directories");
+
 	DB.lock().unwrap().execute("CREATE TABLE messages (
 		id                  INTEGER PRIMARY KEY NOT NULL,
 		channel_id          INTEGER NOT NULL,
@@ -103,7 +99,9 @@ fn main() {
 		&std::env::var("DISCORD_TOKEN").expect("Missing DISCORD_TOKEN env-var.")
 	);
 
-	let perms = felix::init_perms("./perms.json");
+	let mut perms_file = PathBuf::from(DCDUMP_FOLDER);
+	perms_file.push("perms.json");
+	let perms = felix::init_perms(perms_file);
 	println!("## dcdump is running.");
 
 	loop {

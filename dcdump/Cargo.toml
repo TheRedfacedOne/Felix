@@ -6,6 +6,7 @@ authors = ["yupi2"]
 [dependencies]
 lazy_static = "0.2"
 rusqlite = "0.10.1"
-discord = "0.8.0"
+#discord = "0.8.0"
+discord = { path = "../../discord-rs" }
 dpermissions = { path = "../dpermissions" }
 felix = { path = "../felix" }

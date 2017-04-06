@@ -6,6 +6,7 @@ use discord::Discord;
 use discord::model::ChannelId;
 use dpermissions::Permissions;
 use dpermissions::Error;
+use std::path::Path;
 
 pub mod commands;
 pub mod strokes;
@@ -14,7 +15,7 @@ pub struct DContext {
 	pub session: discord::Discord,
 	pub connection: discord::Connection,
 	pub state: discord::State,
-	/// `app_info` should NOT be used to check strings at all. Only cached owner-id.
+	////// `app_info` should NOT be used to check strings at all. Only cached owner-id.
 	pub app_info: discord::model::ApplicationInfo
 }
 
@@ -50,22 +51,22 @@ impl DContext {
 	}
 }
 
-pub fn init_perms(path: &str) -> Permissions {
-	let perms = match dpermissions::load(path) {
+pub fn init_perms<P: AsRef<Path>>(path: P) -> Permissions {
+	let perms = match dpermissions::load(&path) {
 		Ok(p) => p,
 		Err(err) => {
 			match err {
 				Error::Io(_) => {
 					let perms: Permissions = Default::default();
-					match perms.save(path) {
+					match perms.save(&path) {
 						Ok(_) => return perms,
 						Err(e) => {
-							panic!("Error saving default {}:\n{}", path, e);
+							panic!("Error saving default {:?}:\n{}", path.as_ref(), e);
 						}
 					}
 				}
 				Error::Parse(e) => {
-					panic!("Error parsing {}:\n{}", path, e);
+					panic!("Error parsing {:?}:\n{}", path.as_ref(), e);
 				}
 			}
 		}

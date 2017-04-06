@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["nathan"]
 
 [dependencies]
-discord = "0.8.0"
+#discord = "0.8.0"
+discord = { path = "../../discord-rs" }
 dpermissions = { path = "../dpermissions" }

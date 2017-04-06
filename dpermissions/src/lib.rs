@@ -60,7 +60,7 @@ impl Permissions {
 		}
 		false
 	}
-	pub fn save(&self, path: &str) -> Result<(), Error> {
+	pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
 		let mut file = try!(File::create(path));
 		let data = try!(serde_json::to_string_pretty(self));
 		file.write_all(data.as_bytes()).map_err(Error::Io)
