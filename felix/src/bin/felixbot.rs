@@ -30,9 +30,9 @@ const CMD_LIST: &'static [Command] = &[
 
 fn main() {
 	let token = env::args().nth(1).expect("No token specified. Use felixbot [token]");
-	println!("Token: {}", token);
 
 	let mut dctx = DContext::from_bot_token(&token);
+	//let mut dctx = DContext::from_user_token(&token);
 
 	let perms = felix::init_perms("./perms.json");
 	println!("Felix is running.");

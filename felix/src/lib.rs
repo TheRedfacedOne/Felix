@@ -20,16 +20,26 @@ pub struct DContext {
 }
 
 impl DContext {
-	pub fn from_bot_token(token: &str) -> DContext {
-		let session = Discord::from_bot_token(token).expect("Login failed. Invalid token?");
+	pub fn from_session(session: Discord) -> DContext {
 		let (connection, ready) = session.connect().expect("Connection failed.");
 		let app_info = session.get_application_info().unwrap();
+		println!("{:?}", app_info);
 		DContext {
 			session: session,
 			connection: connection,
 			state: discord::State::new(ready),
 			app_info: app_info
 		}
+	}
+
+	pub fn from_bot_token(token: &str) -> DContext {
+		let session = Discord::from_bot_token(token).expect("Login failed. Invalid token?");
+		DContext::from_session(session)
+	}
+
+	pub fn from_user_token(token: &str) -> DContext {
+		let session = Discord::from_user_token(token).expect("Login failed. Invalid token?");
+		DContext::from_session(session)
 	}
 
 	pub fn send_message(&self, c: ChannelId, text: &str, nonce: &str, tts: bool) {

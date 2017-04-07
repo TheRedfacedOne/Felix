@@ -51,7 +51,7 @@ impl<'a> Command<'a> {
 		args: &[&str]
 	) -> bool
 	{
-		if m.author.id == dctx.app_info.owner.id { return true; }
+		//if m.author.id == dctx.app_info.owner.id { return true; }
 		if let Some(_) = p.get_group("default") { return true; }
 		if p.user_has_perm(m.author.id, &c.perm) { return true; }
 		false
