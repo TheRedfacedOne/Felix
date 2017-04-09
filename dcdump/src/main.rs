@@ -7,21 +7,26 @@ extern crate rusqlite;
 extern crate lazy_static;
 
 use std::path::PathBuf;
-use discord::model::{Event, Message, UserId, ChannelId};
+use discord::model::{Event, Message, ChannelId};
 //use discord::model::UserId;
 //use std::env;
 //use std::sync::RwLock;
 //use std::collections::HashMap;
 use felix::DContext;
 use felix::commands::Command;
-use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::borrow::Cow::Borrowed;
 use std::sync::Mutex;
+use std::thread;
 
-
-static SCRAPING_ACTIVE: AtomicBool = ATOMIC_BOOL_INIT;
 
 const DCDUMP_FOLDER: &'static str = "~/.dcdump";
+
+
+struct LoggingInfo {
+	active: bool,
+	should_stop: bool,
+	//channel: ChannelId,
+}
 
 lazy_static! {
 	static ref DB: Mutex<rusqlite::Connection> = {
@@ -31,45 +36,96 @@ lazy_static! {
 			rusqlite::Connection::open(db_file).expect("Failed to open DB")
 		)
 	};
+
+	static ref LOGGING_MUTEX: Mutex<LoggingInfo> = {
+		Mutex::new(
+			LoggingInfo {
+				active: false,
+				should_stop: false,
+				//channel: ChannelId(0),
+			}
+		)
+	};
 }
 
 const CMD_LIST: &'static [Command] = &[
 	Command {
-		label: Borrowed("!scrape_channel"),
-		desc: Borrowed("Scrape that channel"),
+		label: Borrowed("!log_channel"),
+		desc: Borrowed("Log that channel"),
 		help_text: Borrowed("<ChannelId>"),
-		perm: Borrowed("dcdump.scrape_channel"),
-		run: scrape_channel
+		perm: Borrowed("dcdump.log_channel"),
+		run: log_channel_cmd
+	},
+	Command {
+		label: Borrowed("!stop_logging"),
+		desc: Borrowed("Stop logging any channels"),
+		help_text: Borrowed("hmm"),
+		perm: Borrowed("dcdump.log_channel"), // intended
+		run: stop_logging_cmd
 	},
 ];
 
-fn scrape_channel(c: &Command, dctx: &DContext, m: &Message, args: &[&str]) {
+fn stop_logging_cmd(_: &Command, dctx: &DContext, m: &Message, _: &[&str]) {
+	let msg = {
+		let mut info = LOGGING_MUTEX.lock().unwrap();
+
+		if info.active {
+			if info.should_stop {
+				"Error: already stopping"
+			} else {
+				info.should_stop = true;
+				"Logging should stop soon"
+			}
+		} else {
+			"Error: logging not active"
+		}
+	};
+
+	dctx.send_message(m.channel_id, msg, "", false);
+}
+
+fn log_channel_cmd(_: &Command, dctx: &DContext, m: &Message, args: &[&str]) {
 	if args.len() != 1 {
 		dctx.send_message(m.channel_id, "Error: provide channel_id arg", "", false);
 		return;
 	}
 
-	let channel_u64 = u64::from_str_radix(args[1], 10);
+	let channel_to_log = match u64::from_str_radix(args[1], 10) {
+		Ok(num) => { ChannelId(num) },
+		Err(err) => {
+			let msg = format!("Error: failed to parse channel-id ({:?})", err);
+			dctx.send_message(m.channel_id, msg.as_str(), "", false);
+			return;
+		}
+	};
 
-	if channel_u64.is_err() {
-		let err = format!("Error: failed to parse channel-id string to u64 ({:?})", channel_u64);
-		dctx.send_message(m.channel_id, err.as_str(), "", false);
-		return;
-	}
-
-	let channel_to_scrape = ChannelId(channel_u64.unwrap());
-
-	if dctx.state.find_channel(channel_to_scrape).is_none() {
+	if dctx.state.find_channel(channel_to_log).is_none() {
 		dctx.send_message(m.channel_id, "Error: can't find channel", "", false);
 		return;
 	}
 
-	if SCRAPING_ACTIVE.swap(true, Ordering::SeqCst) {
-		dctx.send_message(m.channel_id, "Error: something is currently being scraped", "", false);
+	let is_active = {
+		let mut info = LOGGING_MUTEX.lock().unwrap();
+		if info.active {
+			true
+		} else {
+			info.active = true;
+			false
+		}
+	};
+
+	if is_active {
+		dctx.send_message(m.channel_id, "Error: already logging", "", false);
 		return;
 	}
-	// the SCRAPING_ACTIVE bool is now true
 
+	let builder = thread::Builder::new()
+		.name("discord_logging_thread".into());
+
+	let _ = builder.spawn(logging_thread).unwrap();
+}
+
+fn logging_thread() {
 
 }
 

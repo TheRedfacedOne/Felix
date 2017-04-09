@@ -5,4 +5,4 @@ Also a lib so a friend can use some stuff.
 
 
 # dcdump
-A Discord bot to scrape images (and maybe text) in a channel.
+A Discord bot to log a channel's messages and attachments.
