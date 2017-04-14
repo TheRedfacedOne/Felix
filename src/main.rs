@@ -2,10 +2,13 @@ extern crate discord;
 extern crate dpermissions;
 #[macro_use]
 extern crate lazy_static;
+extern crate hyper;
+extern crate serde_json;
 
 mod commands;
 mod strokes;
 mod help;
+mod jisho;
 
 use discord::Discord;
 use discord::model::Event;
