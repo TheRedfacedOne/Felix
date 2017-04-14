@@ -5,7 +5,7 @@ use discord::model::Message;
 
 pub enum CommandResult {
 	Success,
-	Syntax,
+	Syntax
 }
 
 pub struct Command {
