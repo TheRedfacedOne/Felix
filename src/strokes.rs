@@ -29,8 +29,9 @@ pub fn strokes_cmd(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult {
 			}
 			Err(e) => {
 				let _ = s.send_message(chan,
-					format!{"No graphic for character '{}'", ch}.as_str(),
-					"", false);
+					&format!{"No graphic for character '{}'", ch},
+					"", false
+				);
 				println!("No graphic found for character {}:\n{:?}", ch, e);
 			}
 		}
