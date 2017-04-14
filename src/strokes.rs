@@ -1,20 +1,15 @@
-
+use std::fs::File;
+use commands::CommandResult;
 use discord::Discord;
 use discord::model::Message;
-use commands::Command;
-use std::fs::File;
 
-pub fn strokes_cmd(c: &Command, s: &Discord, m: &Message) {
-	let usage: Vec<&str> = m.content.split(' ').collect();
+pub fn strokes_cmd(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult {
 	let chan = m.channel_id;
-	if usage.len() < 2 {
-		let response = format!("Usage: {}", c.help_txt.as_str());
-		let _ = s.send_message(chan, response.as_str(), "", false);
-		return;
+	if args.len() < 1 {
+		return CommandResult::Syntax
 	}
 	let mut chars: Vec<char> = Vec::new();
-	'outer: for (i, arg) in usage.iter().enumerate() {
-		if i == 0 { continue; }
+	'outer: for arg in args.iter() {
 		for ch in arg.chars() {
 			if chars.len() < 3 { chars.push(ch); }
 			else { break 'outer; }
@@ -33,10 +28,12 @@ pub fn strokes_cmd(c: &Command, s: &Discord, m: &Message) {
 				let _ = s.send_file(chan, "", file, hex.as_str());
 			}
 			Err(e) => {
-				let response = format!("Error opening image for character `{}`", ch);
-				println!("Error opening image {}:\n{}", filename, e);
-				let _ = s.send_message(chan, response.as_str(), "", false);
+				let _ = s.send_message(chan,
+					format!{"No graphic for character '{}'", ch}.as_str(),
+					"", false);
+				println!("No graphic found for character {}:\n{:?}", ch, e);
 			}
 		}
 	}
+	CommandResult::Success
 }

@@ -1,99 +1,75 @@
+use help;
+use strokes;
 use discord::Discord;
 use discord::model::Message;
-use dpermissions::Permissions;
+
+pub enum CommandResult {
+	Success,
+	Syntax,
+}
 
 pub struct Command {
 	pub label: String,
 	pub desc: String,
 	pub help_txt: String,
 	pub perm: String,
-	pub run: fn(c: &Command, s: &Discord, m: &Message),
+	pub run: fn(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult
 }
 
 impl Command {
-	pub fn exec(&self, s: &Discord, m: &Message, c: &Command, p: &Permissions) {
+	pub fn exec(&self, s: &Discord, m: &Message, args: Vec<&str>){
 		let author = format!("{}", m.author.id);
-		if let Some(group) = p.get_group("default") {
-			if p.group_has_perm(group, c.perm.as_str()) { (self.run)(c, s, m) }
-		}
-		if p.user_has_perm(author.as_str(), c.perm.as_str()) {
-			(self.run)(c, s, m)
-		}
-	}
-}
-
-pub fn parse_cmd(s: &Discord, m: &Message, c: &Vec<Command>, p: &Permissions) {
-	if !m.content.starts_with("!") {return;}
-	let usage: Vec<&str> = m.content.split(' ').collect();
-	if usage[0] == "!help" {
-		help_cmd(c, s, m);
-		return;
-	}
-	for cmd in c.iter() {
-		if usage[0] == cmd.label {
-			cmd.exec(s, m, &cmd, p);
-		}
-	}
-}
-
-pub fn help_cmd(cmd_list: &Vec<Command>, s: &Discord, m: &Message) {
-	let ch = m.channel_id;
-	let usage: Vec<&str> = m.content.split(' ').collect();
-	let mut msg = String::from("```");
-	if usage.len() == 1 {
-		for cmd in cmd_list.iter() {
-			msg = msg + format!("{}: {}\nUsage: {}\n\n",
-				cmd.label,
-				cmd.desc,
-				cmd.help_txt
-			).as_str();
-		}
-		msg.push_str("```");
-		match s.send_message(ch, msg.as_str(), "", false) {
-			Ok(_) => {}
-			Err(e) => {
-				println!("Unable to send message:\n {:?}", e);
-			}
-		}
-	} else {
-		for cmd in cmd_list.iter() {
-			if usage[1] == cmd.label.trim_left_matches('!') {
-				msg = format!("```{}: {}\nUsage: {}```",
-					cmd.label,
-					cmd.desc,
-					cmd.help_txt
-				);
-			}
-		}
-		match s.send_message(ch, msg.as_str(), "", false) {
-			Ok(_) => {}
-			Err(e) => {
-				println!("Unable to send message:\n {:?}", e);
+		if check_perms(author.as_str(), self.perm.as_str()) {
+			match (self.run)(s, m, args) {
+				CommandResult::Success => {},
+				CommandResult::Syntax => {
+					let ch = m.channel_id;
+					let help_msg = format!{"```{}```", self.help_txt};
+					let _ = s.send_message(ch, help_msg.as_str(), "", false);
+				}
 			}
 		}
 	}
 }
 
-pub fn ping_cmd(_c: &Command, s: &Discord, m: &Message) {
-	let ch = m.channel_id;
-	match s.send_message(ch, "pong", "", false) {
-		Ok(_) => {}
-		Err(e) => {
-			println!("Unable to send message:\n {:?}", e);
+lazy_static! {
+	pub static ref COMMANDS: Vec<Command> = vec! [
+		Command {
+			label: "!help".into(),
+			desc: "Shows this help message.".into(),
+			help_txt: "Usage:\n  help [command]\nExample:\n  help strokes".into(),
+			perm: "felix.help".into(),
+			run: help::help_cmd
+		},
+		Command {
+			label: "!strokes".into(),
+			desc: "Show the stroke order of a given character.".into(),
+			help_txt: "Usage:\n  strokes <chars>\nExample:\n  strokes 猫".into(),
+			perm: "felix.strokes".into(),
+			run: strokes::strokes_cmd
+		}
+	];
+}
+
+pub fn parse_cmd(s: &Discord, m: &Message) {
+	let mut usage: Vec<&str> = m.content.split(' ').collect();
+	let label = usage.remove(0).to_lowercase();
+	for cmd in COMMANDS.iter() {
+		if cmd.label == label {
+			cmd.exec(s, m, usage);
+			break;
 		}
 	}
 }
 
-pub fn jt_cmd(_c: &Command, s: &Discord, m: &Message) {
-	let ch = m.channel_id;
-	let _ = s.send_embed(ch, "", |embed| { embed
-		.title("Jisho results for query 'cat'")
-		.thumbnail("http://assets.jisho.org/assets/jisho-logo-v4@2x-7330091c079b9dd59601401b052b52e103978221c8fb6f5e22406d871fcc746a.png")
-		.color(u64::from_str_radix("56d926", 16).unwrap())
-		.fields(|fields| { fields
-			.field("Word", "猫", true)
-			.field("Definitions", "cat\nshamisen\ngeisha", true)
-			.field("Reading(s)", "ねこ", true)
-		})
-	});
+fn check_perms(id: &str, perm: &str) -> bool {
+	use PERMS;
+	if let Some(g) = PERMS.get_group("default") {
+		if PERMS.group_has_perm(g, perm) {
+			return true
+		}
+	} else if PERMS.user_has_perm(id, perm) {
+		return true;
+	}
+	false
 }
