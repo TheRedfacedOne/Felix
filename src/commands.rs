@@ -25,7 +25,7 @@ impl Command {
 		let ch = m.channel_id;
 		if check_perms(author.as_str(), self.perm.as_str()) {
 			match (self.run)(s, m, args) {
-				CommandResult::Success => {},
+				CommandResult::Success => {}
 				CommandResult::Syntax => {
 					let help_msg = &format!{"```{}```", self.help_txt};
 					let _ = s.send_message(ch, help_msg, "", false);
