@@ -5,14 +5,13 @@ use discord::model::Message;
 
 pub fn help_cmd(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult {
 	let ch = m.channel_id;
-	let mut help_msg = String::from("```");
+	let mut help_msg = String::new();
 	if args.len() == 0 {
 		for cmd in commands::COMMANDS.iter() {
 			let ref label = cmd.label;
 			let ref help_txt = cmd.help_txt;
 			help_msg.push_str(&format!{"Command: {}\n{}\n\n", label, help_txt});
 		}
-		help_msg.push_str("```");
 		let _ = s.send_message(ch, &help_msg, "", false);
 	} else {
 		for cmd in commands::COMMANDS.iter() {
@@ -22,10 +21,9 @@ pub fn help_cmd(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult {
 				help_msg.push_str(&help_txt);
 			}
 		}
-		if help_msg == "```" {
+		if help_msg == "" {
 			let _ = s.send_message(ch, "Command not found.", "", false);
 		} else {
-			help_msg.push_str("```");
 			let _ = s.send_message(ch, &help_msg, "", false);
 		}
 	}
