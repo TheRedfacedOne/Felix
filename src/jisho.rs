@@ -1,19 +1,168 @@
 use serde_json;
-use serde_json::Value;
-use hyper::client::Client;
 use commands::CommandResult;
 use discord::Discord;
-use discord::model::Message;
+use discord::model::{Message, ChannelId};
+use http;
+use rand::os::OsRng;
 
-// Maybe I'll make this less terrible eventually.
+
+// Some fields are commented out because they are unused, may as well not use the extra memory.
+
+#[derive(Serialize, Deserialize)]
+pub struct Jisho {
+	//meta: JishoMeta,
+	data: Vec<JishoResult>
+}
+
+//#[derive(Serialize, Deserialize)]
+//pub struct JishoMeta {
+	//status: i32
+//}
+
+#[derive(Serialize, Deserialize)]
+pub struct JishoResult {
+	is_common: bool,
+	tags: Vec<String>,
+	japanese: Vec<JishoWord>,
+	senses: Vec<JishoSense>,
+	//attribution: JishoAttribution
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct JishoWord {
+	#[serde(default)]
+	word: String,
+	reading: String
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct JishoSense {
+	english_definitions: Vec<String>,
+	parts_of_speech: Vec<String>,
+	//links: Vec<JishoLink>,
+	tags: Vec<String>,
+	//restrictions: Vec<String>,
+	//see_also: Vec<String>,
+	//antonyms: Vec<String>,
+	//source: Vec<String>,
+	//info: Vec<String>
+}
+
+//#[derive(Serialize, Deserialize)]
+//pub struct JishoLink {
+	//text: String,
+	//url: String
+//}
+
+
+/* This entire struct is commented out because the Jisho API is dumb
+ * and will either give you a boolean or a string. I hope I don't end up needing it.
+ */
+
+//#[derive(Serialize, Deserialize)]
+//pub struct JishoAttribution {
+	//jmdict: String,
+	//jmnedict: String,
+	//dbpedia: String,
+//}
+
+
+fn jisho_search(query: &str) -> Result<Jisho, CommandResult> {
+	let mut url = String::from("http://jisho.org/api/v1/search/words?keyword=");
+	url.push_str(query);
+	let resp = match http::get_resp_str(&url) {
+		Ok(r) => r,
+		Err(e) => return Err(CommandResult::HttpError(e))
+	};
+	println!("Response from {}", url);
+	let j: Jisho = match serde_json::from_str(&resp) {
+		Ok(j) => j,
+		Err(e) => return Err(CommandResult::JsonError(e))
+	};
+	Ok(j)
+}
+
+pub fn format_results(j: Jisho, s: &Discord, ch: &ChannelId, query: &str, i: usize) {
+	let ref is_common = j.data[i].is_common;
+	let ref jp = j.data[i].japanese;
+	let ref senses = j.data[i].senses;
+	let ref tags = j.data[i].tags;
+	let _ = s.send_embed(*ch, "", |mut embed| {
+		embed = embed
+		.color(5691686)
+		.fields(|mut builder| {
+			//TODO make the difference between word and reading clearer in formatting
+			let mut words_str = String::new();
+			for word in jp.iter() {
+				words_str.push_str(&format!("{} ({}) ", &word.word, &word.reading));
+			}
+			if words_str != "" {
+				builder = builder.field("Words", &words_str, true);
+			}
+			let mut tags_str = String::new();
+			for tag in tags.iter() {
+				tags_str.push_str(&format!("`{}` ", &tag));
+			}
+			if &tags_str != "" {
+				builder = builder.field("Tags", &tags_str, true);
+			}
+			//TODO fix rogue commas in some definitions
+			let mut definitions = String::new();
+			for sense in senses.iter() {
+				for pos in sense.parts_of_speech.iter() {
+					definitions.push_str(&format!("**({})**\n", &pos));
+				}
+				for (i, def) in sense.english_definitions.iter().enumerate() {
+					if i < sense.english_definitions.len() {
+						if i == 0 {
+							definitions.push_str(&format!("• {}", &def));
+						} else {
+							definitions.push_str(&format!(", {}, ", &def));
+						}
+					} else {
+						definitions.push_str(&format!("{}", &def));
+					}
+				}
+				definitions.push_str("\n");
+			}
+			builder.field("Definitions", &definitions, false)
+		})
+		.author(|builder| {
+			builder
+			.name(&format!("Jisho results for query '{}'", query.replace("%20", " ")))
+			.url(&format!("http://jisho.org/search/{}", query))
+			.icon_url("http://assets.jisho.org/assets/touch-icon-017b99ca4bfd11363a97f66cc4c00b1667613a05e38d08d858aa5e2a35dce055.png")
+	});
+	if *is_common {
+		embed = embed.description("Common word");
+	}
+	embed
+	//TODO footer if I feel like it, not high priority
+	});
+}
+
+fn random_word(level: u32) -> Result<Jisho, CommandResult> {
+	use rand::Rng;
+	let mut rng = OsRng::new().unwrap();
+	let page = match level {
+		5 => rng.gen_range(0, 32),
+		4 => rng.gen_range(0, 28),
+		3 => rng.gen_range(0, 88),
+		2 => rng.gen_range(0, 91),
+		1 => rng.gen_range(0, 173),
+		_ => return Err(CommandResult::InvalidArg("JLPT level must be a positive integer from 1-5.".into()))
+	};
+	let j = match jisho_search(&format!("%23jlpt-n{}&page={}", level, page)) {
+		Ok(j) => j,
+		Err(e) => return Err(e)
+	};
+	Ok(j)
+}
 
 pub fn jisho_cmd(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult {
-	use std::io::Read;
 	if args.len() < 1 {
 		return CommandResult::Syntax
 	}
-	let client = Client::new();
-	let mut url = String::from("http://jisho.org/api/v1/search/words?keyword=");
 	let mut query = String::new();
 	for (i, arg) in args.iter().enumerate() {
 		query.push_str(arg);
@@ -21,70 +170,30 @@ pub fn jisho_cmd(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult {
 			query.push_str("%20");
 		}
 	}
-	url.push_str(&query);
-	let mut resp = match client.get(&url).send() {
-		Ok(resp) => resp,
-		Err(e) => return CommandResult::HttpError(e)
+	let j = match jisho_search(&query) {
+		Ok(j) => j,
+		Err(e) => return e
 	};
-	println!("Response from {}:\n  Status:{}", url, resp.status);
-	let ch = m.channel_id;
-	let mut resp_string = String::new();
-	let _ = resp.read_to_string(&mut resp_string).unwrap();
-	let jisho_json: Value = serde_json::from_str(&resp_string).unwrap();
-	let ref data = jisho_json["data"];
-	if data.is_null() {
-		let _ = s.send_message(ch,
-			&format!("No results for query '{}'", query.replace("%20", " ")), "", false);
-		return CommandResult::Success
+
+	format_results(j, &s, &m.channel_id, &query, 0);
+	CommandResult::Success
+}
+
+pub fn random_cmd(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult {
+	use rand::Rng;
+	let mut rng = OsRng::new().unwrap();
+	let index: usize = rng.gen_range(0, 19);
+	if args.len() < 1 {
+		return CommandResult::Syntax
 	}
-	let ref word = data[0];
-	let ref jp = word["japanese"];
-	let ref senses = word["senses"];
-	let _ = s.send_embed(ch, "", |mut embed| {
-		embed = embed.title(&format!{"Jisho results for query '{}'", query.replace("%20", " ")})
-			.thumbnail("http://assets.jisho.org/assets/favicon-062c4a0240e1e6d72c38aa524742c2d558ee6234497d91dd6b75a182ea823d65.ico")
-			.url(&format!{"http://jisho.org/search/{}", query})
-			.color(5691686)
-			.fields(|mut builder| {
-				let ref w = jp[0]["word"];
-				let ref r = jp[0]["reading"];
-				if !w.is_null() {
-					builder = builder.field("Word", w.as_str().unwrap(), false);
-				}
-				if !r.is_null() {
-					builder = builder.field("Reading", r.as_str().unwrap(), false);
-				}
-				let mut definitions = String::new();
-				for sense in senses.as_array().unwrap().iter() {
-					for def in sense["english_definitions"].as_array().unwrap().iter() {
-						definitions.push_str(def.as_str().unwrap());
-						definitions.push_str(", ");
-					}
-				}
-				builder.field("Definitions", definitions.trim_right_matches(", "), false)
-			}
-		);
-		if word["is_common"].as_bool().unwrap() {
-			embed = embed.description("Common word");
-		}
-		let mut footer_txt = String::new();
-		for (i, j) in jp.as_array().unwrap().iter().enumerate() {
-			if i == 0 { continue; }
-			else if i == 1 {
-				footer_txt.push_str("Other forms: ");
-			}
-			if !j["word"].is_null() {
-				footer_txt.push_str(&format!{"{} 【{}】",
-					j["word"].as_str().unwrap(), j["reading"].as_str().unwrap()}
-				);
-			} else {
-				footer_txt.push_str(j["reading"].as_str().unwrap());
-			}
-			footer_txt.push(' ');
-		}
-		embed.footer(|footer| {
-			footer.text(footer_txt.as_str())
-		})
-	});
+	let level = match u32::from_str_radix(args[0], 10) {
+		Ok(level) => level,
+		Err(_) => return CommandResult::InvalidArg("JLPT level must be a positive integer from 1-5.".into())
+	};
+	let j = match random_word(level) {
+		Ok(j) => j,
+		Err(e) => return e
+	};
+	format_results(j, s, &m.channel_id, &format!("#jlpt-n{}", level), index);
 	CommandResult::Success
 }
