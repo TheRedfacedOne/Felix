@@ -6,6 +6,9 @@ authors = ["rrred"]
 [dependencies]
 discord = "*"
 lazy_static = "*"
+serde = "*"
 serde_json = "*"
-hyper = "*"
-dpermissions = {path = "dpermissions"}
+serde_derive = "*"
+hyper = "0.10.13"
+rand = "*"
+
