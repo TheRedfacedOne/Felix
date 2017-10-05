@@ -1,30 +1,27 @@
 extern crate discord;
-extern crate dpermissions;
 #[macro_use]
 extern crate lazy_static;
-extern crate hyper;
+extern crate serde;
 extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
+extern crate rand;
+extern crate hyper;
 
 mod commands;
 mod strokes;
 mod help;
 mod jisho;
+mod http;
 
 use discord::Discord;
 use discord::model::Event;
 use std::env;
-use dpermissions::Permissions;
-
-lazy_static! {
-	static ref PERMS: Permissions = dpermissions::load("./perms.json")
-		.expect("Unable to load permissions, check that perms.json exists and is readable.");
-}
 
 fn main() {
 	let token = env::args().nth(1).expect("No token specified. Use felix <token>");
 	let session = Discord::from_bot_token(&token).expect("Login failed. Invalid token?");
 	let (mut conn, _) = session.connect().expect("Connection failed.");
-	lazy_static::initialize(&PERMS);
 	println!("Felix is running.");
 	loop {
 		match conn.recv_event() {
