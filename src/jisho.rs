@@ -2,8 +2,10 @@ use serde_json;
 use commands::CommandResult;
 use discord::Discord;
 use discord::model::{Message, ChannelId};
+use std::io::ErrorKind;
 use http;
 use rand::os::OsRng;
+use io;
 
 
 // Some fields are commented out because they are unused, may as well not use the extra memory.
@@ -67,9 +69,39 @@ pub struct JishoSense {
 //}
 
 
-fn jisho_search(query: &str) -> Result<Jisho, CommandResult> {
-	let mut url = String::from("http://jisho.org/api/v1/search/words?keyword=");
-	url.push_str(query);
+fn jisho_search_fs(query: &str) -> Result<Jisho, CommandResult> {
+	let path = &format!("./data/jisho/{}.json", query);
+	let data = match io::read_file(path) {
+		Ok(d) => {
+			let age = match io::file_age_seconds(path) {
+				Ok(age) => age,
+				Err(e) => return Err(CommandResult::IoError(e))
+			};
+			// 2 weeks
+			if age <= 1209600  {
+				d
+			} else {
+				return jisho_search_http(query)
+			}
+		}
+		Err(e) => {
+			match e.kind() {
+				ErrorKind::NotFound => {
+					return jisho_search_http(query)
+				}
+				_ => return Err(CommandResult::IoError(e))
+			}
+		}
+	};
+	let j: Jisho = match serde_json::from_str(&data) {
+		Ok(j) => j,
+		Err(e) => return Err(CommandResult::JsonError(e))
+	};
+	Ok(j)
+}
+
+fn jisho_search_http(query: &str) -> Result<Jisho, CommandResult> {
+	let url = &format!("http://jisho.org/api/v1/search/words?keyword={}", query);
 	let resp = match http::get_resp_str(&url) {
 		Ok(r) => r,
 		Err(e) => return Err(CommandResult::HttpError(e))
@@ -79,10 +111,22 @@ fn jisho_search(query: &str) -> Result<Jisho, CommandResult> {
 		Ok(j) => j,
 		Err(e) => return Err(CommandResult::JsonError(e))
 	};
+	cache_results(query, &resp);
 	Ok(j)
 }
 
+fn cache_results(query: &str, data: &str) -> CommandResult {
+	let path = &format!("./data/jisho/{}.json", query);
+	match io::write_file(path, data.as_bytes()) {
+		Ok(_) => return CommandResult::Success,
+		Err(e) => return CommandResult::Warning("Error caching Jisho search results.".into())
+	}
+}
+
 pub fn format_results(j: Jisho, s: &Discord, ch: &ChannelId, query: &str, i: usize) {
+	if j.data.len() == 0 {
+		let _ = s.send_message(*ch, "No results found.", "", false);
+	}
 	let ref is_common = j.data[i].is_common;
 	let ref jp = j.data[i].japanese;
 	let ref senses = j.data[i].senses;
@@ -152,7 +196,7 @@ fn random_word(level: u32) -> Result<Jisho, CommandResult> {
 		1 => rng.gen_range(0, 173),
 		_ => return Err(CommandResult::InvalidArg("JLPT level must be a positive integer from 1-5.".into()))
 	};
-	let j = match jisho_search(&format!("%23jlpt-n{}&page={}", level, page)) {
+	let j = match jisho_search_fs(&format!("%23jlpt-n{}&page={}", level, page)) {
 		Ok(j) => j,
 		Err(e) => return Err(e)
 	};
@@ -170,7 +214,7 @@ pub fn jisho_cmd(s: &Discord, m: &Message, args: Vec<&str>) -> CommandResult {
 			query.push_str("%20");
 		}
 	}
-	let j = match jisho_search(&query) {
+	let j = match jisho_search_fs(&query.replace("#", "%23")) {
 		Ok(j) => j,
 		Err(e) => return e
 	};
