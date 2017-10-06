@@ -12,6 +12,7 @@ mod commands;
 mod strokes;
 mod help;
 mod jisho;
+mod io;
 mod http;
 
 use discord::Discord;
