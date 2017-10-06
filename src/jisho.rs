@@ -119,13 +119,14 @@ fn cache_results(query: &str, data: &str) -> CommandResult {
 	let path = &format!("./data/jisho/{}.json", query);
 	match io::write_file(path, data.as_bytes()) {
 		Ok(_) => return CommandResult::Success,
-		Err(e) => return CommandResult::Warning("Error caching Jisho search results.".into())
+		Err(_) => return CommandResult::Warning("Error caching Jisho search results.".into())
 	}
 }
 
 pub fn format_results(j: Jisho, s: &Discord, ch: &ChannelId, query: &str, i: usize) {
 	if j.data.len() == 0 {
 		let _ = s.send_message(*ch, "No results found.", "", false);
+		return;
 	}
 	let ref is_common = j.data[i].is_common;
 	let ref jp = j.data[i].japanese;
