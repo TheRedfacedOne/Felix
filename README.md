@@ -8,7 +8,6 @@ It is written to be a useful tool for people who want to learn Japanese with oth
 - random - Grabs a random word from [Jisho](http://jisho.org) of whatever JLPT level is specified.
 
 ## TODO, in order of priority*
-- Cache Jisho search results to avoid making unnecessary HTTP requests.
 - Add !quiz command, which will be a pictionary style vocabulary quiz on random Japanese words.
 - Add role checks for commands
 - Fix rogue commas in some definitions in Jisho results.
