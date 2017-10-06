@@ -3,6 +3,7 @@ use strokes;
 use jisho;
 use hyper;
 use serde_json;
+use std;
 use discord::Discord;
 use discord::model::Message;
 
@@ -10,8 +11,10 @@ pub enum CommandResult {
 	Success,
 	Syntax,
 	InvalidArg(String),
+	Warning(String),
 	HttpError(hyper::error::Error),
 	JsonError(serde_json::error::Error),
+	IoError(std::io::Error)
 }
 
 pub struct Command {
@@ -34,17 +37,21 @@ impl Command {
 			CommandResult::InvalidArg(msg) => {
 				let _ = s.send_message(ch, &msg, "", false);
 			}
+			CommandResult::Warning(msg) => {
+				println!("{}", &msg);
+			}
+			// Maybe there's a way to combine these 3 while still handling the error.
 			CommandResult::HttpError(e) => {
-				let _ = s.send_message(ch,
-					&format!{"An error occured while running `{}` :(", self.label}, "", false
-				);
+				let _ = s.send_message(ch, "Something broke, rip", "", false);
 				println!("HTTP error while running {}:\n  {:?}", self.label, e);
 			}
 			CommandResult::JsonError(e) => {
-				let _ = s.send_message(ch,
-					&format!{"An error occured while running `{}` :(", self.label}, "", false
-				);
+				let _ = s.send_message(ch, "Something broke, rip", "", false);
 				println!("JSON error while running {}:\n  {:?}", self.label, e);
+			}
+			CommandResult::IoError(e) => {
+				let _ = s.send_message(ch, "Something broke, rip", "", false);
+				println!("I/O error while running {}:\n  {:?}", self.label, e);
 			}
 		}
 	}
